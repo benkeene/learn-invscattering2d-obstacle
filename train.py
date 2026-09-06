@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("--retrain", default=None, type=str) #format: test/model_100.pt
     parser.add_argument("--ndata_train", default=None, type=int)
     parser.add_argument("--cfg_by_nc", action='store_true') #default False
+    parser.add_argument("--seed", default=None, type=int) # None = unseeded (original behavior)
     args = parser.parse_args()
     if args.retrain:
         old_model_name = args.retrain[:args.retrain.find('/' or "\\")]
@@ -42,6 +43,15 @@ def parse_args():
     f = open(args.train_cfg_path)
     train_cfg = json.load(f)
     f.close()
+    # Optional reproducible init/shuffling. Default (None) leaves the original
+    # unseeded behavior untouched; when given, the seed overrides train_cfg["seed"]
+    # (which the shipped configs carry but never used) and is echoed into the
+    # saved train_config.json via train_cfg.
+    if args.seed is not None:
+        train_cfg["seed"] = args.seed
+        torch.manual_seed(args.seed)
+        np.random.seed(args.seed)
+        logger.info("seeding torch + numpy with seed %d", args.seed)
     return args, train_cfg
 
 def read_data(data_dir):
@@ -208,7 +218,16 @@ def main():
         logger.info('final rel err {:.4f}, abs err {:.4f}'.format(final_error_rel, final_error_abs))
         return
         
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Prefer MPS for float32 on Apple Silicon (~15x faster than CPU, numerically
+    # faithful to ~1e-5). MPS has no float64, so float64 configs fall back to
+    # CPU. CUDA path unchanged.
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch.backends.mps.is_available() and data_type == torch.float32:
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
+    logger.info("using device %s", device)
     if network_type == 'convnet':
         model = network.ConvNet(data_cfg, train_cfg)
     elif network_type == 'complexnet':

@@ -1,10 +1,18 @@
-function starn_lsm_fft(lsm_idx, cfg_path)
+function starn_lsm_fft(lsm_idx, cfg_path, out_dir)
 % starn_lsm_fft uses linear sampling method to compute a level curve and
 % extracts a star-shaped contour curve through FFT
+%
+% out_dir (optional, added locally): where the per-case inverse<idx>.mat and
+% figures are written. Defaults to './data/lsm' (the original hardcoded
+% location); pass a per-config directory when looping over several configs so
+% the cases don't clobber each other.
 close all
-clearvars -except lsm_idx cfg_path
+clearvars -except lsm_idx cfg_path out_dir
 if nargin == 0
     lsm_idx=1;
+end
+if nargin < 3 || isempty(out_dir)
+    out_dir = './data/lsm';
 end
 cfg_str = fileread(cfg_path);
 cfg = jsondecode(cfg_str);
@@ -177,16 +185,25 @@ err_Chamfer_refined = mean([min(dist_refined), min(dist_refined,[],2)']);
 err_Chamfer = [err_Chamfer1, err_Chamfer_refined];
 inverse_result = [src_lsm.xs; src_lsm.ys; src_info_lsm_res.xs; src_info_lsm_res.ys;...
         src_info.xs; src_info.ys]; %lsm; refined; true
-if ~exist('./data/lsm', 'dir')
-    mkdir('./data/lsm');
+if ~exist(out_dir, 'dir')
+    mkdir(out_dir);
 end
-if ~exist('./data/lsm/figs', 'dir')
-    mkdir('./data/lsm/figs');
+if ~exist(fullfile(out_dir, 'figs'), 'dir')
+    mkdir(fullfile(out_dir, 'figs'));
 end
-if ~exist('./data/lsm/inverse', 'dir')
-    mkdir('./data/lsm/inverse');
+if ~exist(fullfile(out_dir, 'inverse'), 'dir')
+    mkdir(fullfile(out_dir, 'inverse'));
 end
-save(['./data/lsm/inverse/inverse' num2str(lsm_idx) '.mat'], "inverse_result", "err_Chamfer", "err_l2")
+% err_l2 as a 2-vector [LSM prediction, GN-refined], matching the layout
+% starn_inverse_singlefreq writes, so both feed the same table builder.
+err_l2_refined = -1;
+if nc == nc_lsm
+    err_l2_refined = norm(coefs - coef_out) / norm(coefs);
+end
+err_l2 = [err_l2, err_l2_refined];
+coefs_true = coefs;                                                  %#ok<NASGU>
+save(fullfile(out_dir, 'inverse', ['inverse' num2str(lsm_idx) '.mat']), ...
+    "inverse_result", "err_Chamfer", "err_l2", "coefs_true", "coefs_lsm_fit", "coef_out")
 fprintf(['Chamfer error before refine ' num2str(err_Chamfer1) ', after refine ' num2str(err_Chamfer_refined) '\n'])
 w = 9;
 h = 8;
@@ -195,6 +212,7 @@ set(gcf, 'PaperSize', [w h]);
 set(gcf, 'PaperPositionMode', 'manual');
 set(gcf, 'PaperPosition', [0 0 w h]);
 set(gcf, 'renderer', 'painters');
-fig_path = ['./data/lsm/figs/nc' int2str(nc) '_k' int2str(kh) '_nclsm' int2str(nc_lsm) '_' int2str(lsm_idx) '.pdf'];
+fig_path = fullfile(out_dir, 'figs', ['nc' int2str(nc) '_k' int2str(kh) ...
+    '_nclsm' int2str(nc_lsm) '_' int2str(lsm_idx) '.pdf']);
 print(gcf, '-dpdf', fig_path);
 end
