@@ -1,4 +1,4 @@
-function starn_data_generation(mat_id, cfg_path)
+function starn_data_generation(mat_id, cfg_path, out_root)
 % starn_data_generation generates scattering data for a star shaped domain
 % with a fixed number of sensors and incident directions such that data is 
 % available for all sensors at each incident direction
@@ -9,8 +9,15 @@ function starn_data_generation(mat_id, cfg_path)
 % (max_id-1)*ndata_per_mat+1 to mat_id*ndata_per_mat, with 'ndata_per_mat'
 % specified in the config file
 % mat_id < 0: generate validation data and all training data
+%
+% out_root (optional, added locally): parent directory for the generated
+% star<nc>_kh<kh>_n<n_tgt>_<ndata> folder. Defaults to './data' (the original
+% hardcoded location).
 close all
-clearvars -except mat_id cfg_path
+clearvars -except mat_id cfg_path out_root
+if nargin < 3 || isempty(out_root)
+    out_root = './data';
+end
 tic
 if mat_id < 0
     fprintf('Generating validatation data and all training data \n')
@@ -67,7 +74,7 @@ rng(ndata+nvalid)
 coefs_val = sample_fc(cfg, nvalid);
 
 
-dirname = ['./data/star' int2str(nc) '_kh' int2str(kh) '_n' int2str(n_tgt) '_' int2str(ndata)];
+dirname = fullfile(out_root, ['star' int2str(nc) '_kh' int2str(kh) '_n' int2str(n_tgt) '_' int2str(ndata)]);
 if ~strcmp(data_prefix, '')
     dirname = strcat(dirname, '_', data_prefix);
 end
